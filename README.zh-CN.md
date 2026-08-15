@@ -37,7 +37,7 @@ pi install npm:@hsingjui/pi-hooks
 
 ## 当前支持范围
 
-- 仅支持 `type: "command"`
+- 支持 `type: "command"`（本地 shell 命令）与 `type: "http"`（webhook）两种 hook
 - 支持 hook handler 的 `if` 字段（仅工具事件生效）
 - 支持事件：
   - `SessionStart`
@@ -49,7 +49,34 @@ pi install npm:@hsingjui/pi-hooks
   - `PostToolUseFailure`
   - `UserPromptSubmit`
   - `Stop`
-- 不支持：`http`、`prompt`、`agent`
+- 不支持：`prompt`、`agent`
+
+## HTTP Hooks
+
+除了执行本地命令，hook 还可以把 JSON 输入 POST 到 webhook 地址，并把响应体当作 hook 输出（按 JSON 解析，与 command 的 stdout 处理方式一致）：
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "bash",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "https://example.com/hooks/pre-tool",
+            "headers": {
+              "Authorization": "Bearer your-token"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+请求为 `POST`，`Content-Type: application/json`，请求体与 command hook 通过 stdin 收到的 JSON 载荷完全一致（见 [Hook 输入](#hook-输入)）。响应体按 command hook 的 stdout 处理——返回包含 `hookSpecificOutput` / `permissionDecision` / `additionalContext` 等字段的 JSON 对象即可控制 hook 结果。非 2xx 响应或网络错误视为 hook 失败；`timeout`（秒）同样生效。
 
 ## 事件映射关系
 
@@ -557,7 +584,7 @@ pi install npm:@hsingjui/pi-hooks
 
 - `src/pi-hooks.ts` - 扩展入口
 - `src/config.ts` - 配置加载与合并
-- `src/executor.ts` - command hook 执行器
+- `src/executor.ts` - hook 执行器（command / http）
 - `src/hooks/shared.ts` - hook 共享解析与执行辅助
 - `src/hooks/session-hooks.ts` - `SessionStart` / `SessionEnd`
 - `src/hooks/compact-hooks.ts` - `PreCompact` / `PostCompact`

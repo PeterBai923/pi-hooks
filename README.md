@@ -37,7 +37,7 @@ pi install npm:@hsingjui/pi-hooks
 
 ## Current Support
 
-- Only `type: "command"` is supported
+- Supports `type: "command"` (local shell command) and `type: "http"` (webhook) hooks
 - Supports the `if` field on individual hook handlers for tool events only
 - Supported events:
   - `SessionStart`
@@ -49,7 +49,34 @@ pi install npm:@hsingjui/pi-hooks
   - `PostToolUseFailure`
   - `UserPromptSubmit`
   - `Stop`
-- Not supported: `http`, `prompt`, `agent`
+- Not supported: `prompt`, `agent`
+
+## HTTP Hooks
+
+Instead of running a local command, a hook can POST its JSON input to a webhook URL and use the response body as the hook output (parsed as JSON, same as command stdout):
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "bash",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "https://example.com/hooks/pre-tool",
+            "headers": {
+              "Authorization": "Bearer your-token"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The request is a `POST` with `Content-Type: application/json`; the body is the same JSON payload a command hook receives on stdin (see [Hook Input](#hook-input)). The response body is treated exactly like a command hook's stdout — return a JSON object with `hookSpecificOutput`/`permissionDecision`/`additionalContext` etc. to control the hook result. A non-2xx response or network error fails the hook; `timeout` (seconds) applies as well.
 
 ## Event Mapping
 
@@ -557,7 +584,7 @@ Source code lives in `src/`:
 
 - `src/pi-hooks.ts` - extension entry point
 - `src/config.ts` - config loading and merging
-- `src/executor.ts` - command hook executor
+- `src/executor.ts` - hook executor (command / http)
 - `src/hooks/shared.ts` - shared parsing and execution helpers
 - `src/hooks/session-hooks.ts` - `SessionStart` / `SessionEnd`
 - `src/hooks/compact-hooks.ts` - `PreCompact` / `PostCompact`

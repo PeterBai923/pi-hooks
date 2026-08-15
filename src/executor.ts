@@ -95,7 +95,71 @@ export async function executeHook(
   timeoutMs: number = 60000,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const inputJson = JSON.stringify(input);
+
+  // type 省略时按 command 处理（兼容无 type 字段的旧配置）
+  if (hook.type === "http" && hook.url) {
+    return executeHttpHook(hook.url, hook.headers, inputJson, timeoutMs);
+  }
+
+  if (!hook.command) {
+    return {
+      stdout: "",
+      stderr: "[pi-hooks] Hook 缺少 command 字段",
+      exitCode: 1,
+    };
+  }
+
   return executeCommandHook(hook.command, inputJson, cwd, timeoutMs);
+}
+
+/**
+ * HTTP hook：向 url 发送 POST JSON 请求，
+ * 响应体按 command hook 的 stdout 处理（解析为 JSON 输出）。
+ */
+function executeHttpHook(
+  url: string,
+  headers: Record<string, string> | undefined,
+  inputJson: string,
+  timeoutMs: number,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(headers ?? {}),
+      },
+      body: inputJson,
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const body = await res.text();
+        clearTimeout(timer);
+        if (!res.ok) {
+          resolve({
+            stdout: "",
+            stderr: body ? `HTTP ${res.status}: ${body}` : `HTTP ${res.status}`,
+            exitCode: 1,
+          });
+        } else {
+          resolve({ stdout: body, stderr: "", exitCode: 0 });
+        }
+      })
+      .catch((err: unknown) => {
+        clearTimeout(timer);
+        const aborted = err instanceof Error && err.name === "AbortError";
+        resolve({
+          stdout: "",
+          stderr: aborted
+            ? "[pi-hooks] Hook timed out"
+            : `HTTP 请求失败: ${err instanceof Error ? err.message : String(err)}`,
+          exitCode: 1,
+        });
+      });
+  });
 }
 
 function executeCommandHook(

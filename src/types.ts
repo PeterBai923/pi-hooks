@@ -2,15 +2,24 @@
 // 类型定义
 // ============================================================================
 
-export type HookType = "command";
+export type HookType = "command" | "http";
 
 export type SessionStartMatcher = "startup" | "resume" | "compact";
 export type SessionEndReason = "other";
 export type CompactTrigger = "manual" | "auto";
 
 export type Hook = {
-  type: "command";
-  command: string;
+  /**
+   * Hook 类型："command"（本地命令）或 "http"（webhook）。
+   * 省略时默认为 "command"。
+   */
+  type?: HookType;
+  /** type 为 "command" 时必填：要执行的 shell 命令 */
+  command?: string;
+  /** type 为 "http" 时必填：接收 POST JSON 的 webhook 地址 */
+  url?: string;
+  /** type 为 "http" 时的可选自定义请求头 */
+  headers?: Record<string, string>;
   if?: string;
   timeout?: number;
   async?: boolean;
