@@ -49,6 +49,7 @@ pi install npm:@hsingjui/pi-hooks
   - `PostToolUseFailure`
   - `UserPromptSubmit`
   - `Stop`
+  - `StopFailure`
 - Not supported: `prompt`, `agent`
 
 ## HTTP Hooks
@@ -86,6 +87,7 @@ The request is a `POST` with `Content-Type: application/json`; the body is the s
 - `SessionStart.compact` → `session_compact`
 - `SessionEnd.other` → `session_shutdown`
 - `Stop` → `agent_end` (best-effort emulation of Claude Code's “after response completes” behavior)
+- `StopFailure` → `agent_end` (when the last assistant message has `stopReason: "error"`)
 
 ## Configuration Format
 
@@ -211,7 +213,7 @@ Notes:
 
 - `SessionEnd` is triggered from `session_shutdown`
 - When `matcher` is omitted, it defaults to `other` for `SessionEnd`
-- `UserPromptSubmit` and `Stop` do not support `matcher`; if provided, it is ignored
+- `UserPromptSubmit`, `Stop` and `StopFailure` do not support `matcher`; if provided, it is ignored
 
 ## `if` Conditions
 
@@ -328,10 +330,34 @@ Mapped from Pi's `agent_end` event.
 Notes:
 
 - `Stop` runs after the current agent turn finishes
+- When the last assistant message has `stopReason: "error"` (agent failure), `StopFailure` is triggered instead
 - `Stop` does not support `matcher`; if configured, it is ignored
-- `stop_hook_active` indicates whether the current continuation was triggered by a previous `Stop` hook
+- `stop_hook_active` indicates whether the current continuation was triggered by a previous `Stop`/`StopFailure` hook
 - `last_assistant_message` tries to extract the last assistant text content; if none exists, it is an empty string
 - When `decision: "block"` is returned, the extension best-effort simulates Claude Code's “prevent stopping and continue” behavior by injecting hidden context and starting another agent turn
+
+### StopFailure
+
+Mapped from Pi's `agent_end` event (triggered when the last assistant message has `stopReason: "error"`).
+
+```json
+{
+  "session_id": "session-file-path",
+  "transcript_path": "/path/to/session.jsonl",
+  "cwd": "/current/working/directory",
+  "hook_event_name": "StopFailure",
+  "stop_hook_active": false,
+  "last_assistant_message": "I have completed the task.",
+  "error_message": "connection reset by peer"
+}
+```
+
+Notes:
+
+- `StopFailure` runs when the agent stops due to an error; on a normal stop, `Stop` runs instead
+- `StopFailure` does not support `matcher`; if configured, it is ignored
+- The input extends `Stop` with `error_message` (the error from the last assistant message)
+- `decision: "block"` behaves the same as `Stop`: injects hidden context and starts another agent turn
 
 ### PreToolUse
 

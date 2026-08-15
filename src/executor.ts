@@ -39,11 +39,14 @@ export function buildHookInput(ctx: HookExecutionContext): object {
     };
   }
 
-  if (ctx.hookEventName === "Stop") {
+  if (ctx.hookEventName === "Stop" || ctx.hookEventName === "StopFailure") {
     return {
       ...base,
       stop_hook_active: ctx.stopHookActive ?? false,
       last_assistant_message: ctx.lastAssistantMessage ?? "",
+      ...(ctx.hookEventName === "StopFailure"
+        ? { error_message: ctx.errorMessage ?? "" }
+        : {}),
     };
   }
 

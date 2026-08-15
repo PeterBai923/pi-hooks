@@ -49,6 +49,7 @@ pi install npm:@hsingjui/pi-hooks
   - `PostToolUseFailure`
   - `UserPromptSubmit`
   - `Stop`
+  - `StopFailure`
 - 不支持：`prompt`、`agent`
 
 ## HTTP Hooks
@@ -86,6 +87,7 @@ pi install npm:@hsingjui/pi-hooks
 - `SessionStart.compact` → `session_compact`
 - `SessionEnd.other` → `session_shutdown`
 - `Stop` → `agent_end`（best-effort 对齐 Claude Code 的“响应完成后触发”行为）
+- `StopFailure` → `agent_end`（最后一条 assistant 消息 `stopReason` 为 `error` 时触发）
 
 ## 配置格式
 
@@ -211,7 +213,7 @@ pi install npm:@hsingjui/pi-hooks
 
 - `SessionEnd` 由 `session_shutdown` 触发
 - 当 `matcher` 省略时，`SessionEnd` 默认按 `other` 处理
-- `UserPromptSubmit` 和 `Stop` 不支持 `matcher`，即使配置了也会被忽略
+- `UserPromptSubmit`、`Stop` 和 `StopFailure` 不支持 `matcher`，即使配置了也会被忽略
 
 ## `if` 条件
 
@@ -328,10 +330,34 @@ pi install npm:@hsingjui/pi-hooks
 说明：
 
 - `Stop` 在本轮 agent 处理完成后触发
+- 当最后一条 assistant 消息的 `stopReason` 为 `error`（agent 失败）时，改为触发 `StopFailure`
 - `Stop` 不支持 `matcher`，即使配置也会被忽略
-- `stop_hook_active` 用于标识当前继续执行是否由上一次 `Stop` hook 触发
+- `stop_hook_active` 用于标识当前继续执行是否由上一次 `Stop` / `StopFailure` hook 触发
 - `last_assistant_message` 会尽量提取最后一条 assistant 文本内容；若没有文本则为空字符串
 - `decision: "block"` 时，会以隐藏上下文 + 追加一轮 agent 的方式 best-effort 模拟 Claude Code 的“阻止停止并继续”语义
+
+### StopFailure
+
+对应 Pi 的 `agent_end` 事件（最后一条 assistant 消息 `stopReason` 为 `error` 时触发）。
+
+```json
+{
+  "session_id": "session-file-path",
+  "transcript_path": "/path/to/session.jsonl",
+  "cwd": "/current/working/directory",
+  "hook_event_name": "StopFailure",
+  "stop_hook_active": false,
+  "last_assistant_message": "I have completed the task.",
+  "error_message": "connection reset by peer"
+}
+```
+
+说明：
+
+- `StopFailure` 在本轮 agent 因错误停止时触发，正常结束时触发 `Stop`
+- `StopFailure` 不支持 `matcher`，即使配置也会被忽略
+- 输入在 `Stop` 的基础上增加 `error_message`（最后一条 assistant 消息的错误信息）
+- `decision: "block"` 时与 `Stop` 一致：以隐藏上下文 + 追加一轮 agent 的方式继续执行
 
 ### PreToolUse
 
@@ -590,7 +616,7 @@ pi install npm:@hsingjui/pi-hooks
 - `src/hooks/compact-hooks.ts` - `PreCompact` / `PostCompact`
 - `src/hooks/prompt-hooks.ts` - `UserPromptSubmit`
 - `src/hooks/tool-hooks.ts` - `PreToolUse` / `PostToolUse` / `PostToolUseFailure`
-- `src/hooks/stop-hooks.ts` - `Stop`
+- `src/hooks/stop-hooks.ts` - `Stop` / `StopFailure`
 - `src/types.ts` - 类型定义
 
 ## 说明

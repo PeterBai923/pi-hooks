@@ -24,6 +24,7 @@ const HOOK_KEYS: Array<keyof HooksConfig> = [
   "PostToolUseFailure",
   "UserPromptSubmit",
   "Stop",
+  "StopFailure",
   "session_start",
   "session_end",
   "pre_compact",
@@ -33,6 +34,7 @@ const HOOK_KEYS: Array<keyof HooksConfig> = [
   "post_tool_use_failure",
   "user_prompt_submit",
   "stop",
+  "stop_failure",
 ];
 
 export function readSettingsFile(settingsPath: string): SettingsFile | undefined {
@@ -130,6 +132,8 @@ export function getHookGroups(
       ];
     case "Stop":
       return [...(hooks.Stop ?? []), ...(hooks.stop ?? [])];
+    case "StopFailure":
+      return [...(hooks.StopFailure ?? []), ...(hooks.stop_failure ?? [])];
     default:
       return [];
   }

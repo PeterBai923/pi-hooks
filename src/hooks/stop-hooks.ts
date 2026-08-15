@@ -15,27 +15,38 @@ import {
   hookIfMatches,
 } from "./shared";
 
-function findLastAssistantMessageText(messages: unknown[]): string {
+function findLastAssistantMessage(messages: unknown[]): {
+  text: string;
+  stopReason?: string;
+  errorMessage?: string;
+} | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i] as {
       role?: string;
       content?: unknown;
+      stopReason?: string;
+      errorMessage?: string;
     };
 
     if (message?.role === "assistant") {
-      return extractTextFromContent(message.content);
+      return {
+        text: extractTextFromContent(message.content),
+        stopReason: message.stopReason,
+        errorMessage: message.errorMessage,
+      };
     }
   }
 
-  return "";
+  return undefined;
 }
 
 export async function triggerStopHooks(
+  eventName: "Stop" | "StopFailure",
   context: HookExecutionContext,
   settings: SettingsFile | undefined,
   notify?: NotifyFn,
 ): Promise<StopResult> {
-  const groups = getHookGroups(settings, "Stop");
+  const groups = getHookGroups(settings, eventName);
   const result: StopResult = { blocked: false };
 
   for (const group of groups) {
@@ -44,7 +55,7 @@ export async function triggerStopHooks(
 
       try {
         const { hookResult, plainStdout, jsonOutput, commonOutput } =
-          await executeParsedHook(hook, context, "Stop");
+          await executeParsedHook(hook, context, eventName);
 
         if (hookResult.exitCode === 0 && jsonOutput) {
           const additionalContext = getStringField(
@@ -66,7 +77,7 @@ export async function triggerStopHooks(
             jsonOutput.decision !== "block"
           ) {
             notify?.(
-              `Stop 忽略无效 decision: ${String(jsonOutput.decision)}`,
+              `${eventName} 忽略无效 decision: ${String(jsonOutput.decision)}`,
               "warning",
             );
           }
@@ -75,21 +86,21 @@ export async function triggerStopHooks(
             result.blocked = true;
             result.reason =
               getStringField(jsonOutput.reason) ??
-              "Continue requested by Stop hook";
+              "Continue requested by hook";
             return result;
           }
         } else if (hookResult.exitCode === 0 && plainStdout) {
-          notify?.(`Stop 输出 (非JSON): ${plainStdout}`, "info");
+          notify?.(`${eventName} 输出 (非JSON): ${plainStdout}`, "info");
         }
 
         if (hookResult.exitCode !== 0) {
           notify?.(
-            `Stop 失败 (exit ${hookResult.exitCode}): ${hookResult.stderr}`,
+            `${eventName} 失败 (exit ${hookResult.exitCode}): ${hookResult.stderr}`,
             "error",
           );
         }
       } catch (err) {
-        notify?.(`Stop 执行错误: ${String(err)}`, "error");
+        notify?.(`${eventName} 执行错误: ${String(err)}`, "error");
       }
     }
   }
@@ -99,14 +110,22 @@ export async function triggerStopHooks(
 
 export function registerStopHooks(pi: ExtensionAPI, shared: HookModuleContext) {
   pi.on("agent_end", async (event, ctx) => {
+    const lastAssistant = findLastAssistantMessage(event.messages);
+    // agent 失败时最后一条 assistant 消息的 stopReason 为 "error"，
+    // 此时触发 StopFailure，否则触发 Stop。
+    const eventName: "Stop" | "StopFailure" =
+      lastAssistant?.stopReason === "error" ? "StopFailure" : "Stop";
+
     const result = await triggerStopHooks(
+      eventName,
       {
         sessionId: shared.getSessionId(ctx),
         cwd: ctx.cwd,
-        hookEventName: "Stop",
+        hookEventName: eventName,
         transcriptPath: ctx.sessionManager.getSessionFile(),
         stopHookActive: shared.stopHookActive,
-        lastAssistantMessage: findLastAssistantMessageText(event.messages),
+        lastAssistantMessage: lastAssistant?.text ?? "",
+        errorMessage: lastAssistant?.errorMessage,
       },
       shared.currentSettings,
       (msg, type) => shared.notify(ctx, msg, type),
@@ -124,7 +143,7 @@ export function registerStopHooks(pi: ExtensionAPI, shared: HookModuleContext) {
           content: continuationMessage,
           display: false,
           details: {
-            hookEventName: "Stop",
+            hookEventName: eventName,
             stopHookActive: true,
           },
         },

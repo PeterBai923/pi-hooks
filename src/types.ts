@@ -40,6 +40,7 @@ export type HooksConfig = {
   PostToolUseFailure?: HookGroup[];
   UserPromptSubmit?: HookGroup[];
   Stop?: HookGroup[];
+  StopFailure?: HookGroup[];
   // 支持小写别名
   session_start?: HookGroup[];
   session_end?: HookGroup[];
@@ -50,6 +51,7 @@ export type HooksConfig = {
   post_tool_use_failure?: HookGroup[];
   user_prompt_submit?: HookGroup[];
   stop?: HookGroup[];
+  stop_failure?: HookGroup[];
 };
 
 export type SettingsFile = {
@@ -65,7 +67,8 @@ export type HookEventName =
   | "PostToolUse"
   | "PostToolUseFailure"
   | "UserPromptSubmit"
-  | "Stop";
+  | "Stop"
+  | "StopFailure";
 
 export type HookMatcherValue<T extends HookEventName> =
   T extends "SessionStart" ? SessionStartMatcher
@@ -87,9 +90,10 @@ export interface HookExecutionContext {
   transcriptPath?: string;
   // UserPromptSubmit fields
   prompt?: string;
-  // Stop fields
+  // Stop / StopFailure fields
   stopHookActive?: boolean;
   lastAssistantMessage?: string;
+  errorMessage?: string;
   // PreToolUse/PostToolUse/PostToolUseFailure fields
   toolName?: string;
   toolInput?: Record<string, unknown>;
